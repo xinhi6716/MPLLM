@@ -1,0 +1,137 @@
+
+standard_prompt = '''Write a short and coherent story about {topic} that incorporates the answers to the following {n} questions: {questions}
+'''
+
+## prompts for self-refinement ##
+self_refine_feedback_prompt = '''{question_answer}
+---
+Reflect on the response. Analyze the correctness of the information provided, and the coherence of the story. Provide critque to help improve the response. Your feedback:
+'''
+
+self_refine_refinement_prompt = '''{question_answer}
+---
+Feedback: {feedback}
+---
+Based on your initial response and the subsequent feedback, revise the response. Your revised response:
+'''
+#################################
+
+trivia_personas_switch_prompt = '''Make 3 groups for {topic} trivia.
+
+Each: researcher + thinker. One global decider.
+
+Output JSON only in form:
+{"decider":"...","groups":[{"group_id":1,"researcher":"...","thinker":"..."}, {"group_id":2,"researcher":"...","thinker":"..."}, {"group_id":3,"researcher":"...","thinker":"..."}]}
+'''
+
+codenames_personas_switch_prompt = '''You are Personas Switch for a Codenames-style task.
+
+== Inputs ==
+- n = {n}
+- target_words = {target_words}
+- word_list = {word_list}
+
+== Your goals ==
+1) As the temporary Spymaster, output ONE English word that best links ALL target_words while minimizing confusion with other words in word_list.
+2) Select three diverse persona groups (researcher + thinker) for downstream work.
+3) Define ONE global decider (team lead, not the spymaster).
+
+== Clue rules (strict) ==
+- Exactly ONE word; no spaces/hyphens/punctuation; not equal to any word in word_list.
+- Prefer a higher-level concept covering most targets; break ties by minimizing distractor association.
+- Do NOT explain reasoning. Output JSON only.
+
+== Persona rules ==
+- Researchers/thinkers must match semantics implied by target_words (e.g., linguist, film historian, strategist).
+- The decider: does NOT discuss clues directly; instead, they integrate and refine the team’s conclusions into a coherent final answer for external reporting.
+- Ensure diversity; no identical personas across groups.
+- Personas must be unique and domain-specific.
+
+== Output JSON (keys and order are MANDATORY) ==
+{
+  "spymaster_clue": "word",
+  "groups": [
+    {
+      "group_id": 1,
+      "researcher": {"persona": "..."},
+      "thinker":    {"persona": "..."}
+    },
+    {
+      "group_id": 2,
+      "researcher": {"persona": "..."},
+      "thinker":    {"persona": "..."}
+    },
+    {
+      "group_id": 3,
+      "researcher": {"persona": "..."},
+      "thinker":    {"persona": "..."}
+    }
+  ],
+  "decider": {"persona": "..."}
+}
+
+== Mini example ==
+target_words = ["director","kiss","popcorn","street"]
+→ Valid JSON must include: "spymaster_clue": "movie"
+
+Do not simulate a dialogue. Return JSON only.
+'''
+
+logic_personas_switch_prompt = '''You are Personas Switch for a Logic Grid Puzzle.
+
+== Input ==
+{inputs}  # contains the setup, houses, entities, all clues, and the final question.
+
+== Your goals ==
+1) Select three complementary persona groups:
+   - researcher: extracts and encodes factual constraints from the description and clues.
+   - thinker: performs step-by-step logical deduction, elimination, and grid reasoning.
+2) Define one global decider persona (team lead; not the switch):
+   - acts as the group leader, who consolidates the final outputs from researchers and thinkers into a polished, unified result to be reported externally.
+3) Work strictly with the given clues; do NOT assume external or world knowledge.
+
+== Rules ==
+- Researchers: specialize in parsing and structuring clues into formal constraints (positions, adjacency, order, uniqueness).
+- Thinkers: specialize in deduction, elimination of contradictions, and reasoning chains until only one consistent solution remains.
+- The decider: does NOT discuss clues directly; instead, they integrate and refine the team’s conclusions into a coherent final answer for external reporting.
+- Personas must be diverse; no duplicates across groups.
+
+== Clue interpretation standards ==
+- "directly left of" ⇒ pos(X) = pos(Y) - 1  
+- "one house between" ⇒ |pos(X) - pos(Y)| = 2  
+- "left of" / "right of" ⇒ strict inequality (pos(X) < pos(Y) or >)  
+- Houses are numbered 1..N left-to-right; boundaries must be respected.
+
+== Uniqueness and completeness ==
+- Each attribute (flower, instrument, etc.) is assigned to exactly one house.  
+- No duplicates allowed; enforce bijection between attributes and houses.  
+- Check global consistency before finalizing.
+
+== Output requirements ==
+- Output STRICT JSON ONLY, with the exact keys below.  
+- Do not output options or candidate lists.  
+- Do not simulate dialogue.  
+- No prose outside schema.
+
+== Output schema (STRICT JSON ONLY) ==
+{
+  "groups": [
+    {
+      "group_id": 1,
+      "researcher": {"persona": "..."},
+      "thinker":    {"persona": "..."}
+    },
+    {
+      "group_id": 2,
+      "researcher": {"persona": "..."},
+      "thinker":    {"persona": "..."}
+    },
+    {
+      "group_id": 3,
+      "researcher": {"persona": "..."},
+      "thinker":    {"persona": "..."}
+    }
+  ],
+  "decider": {"persona": "..."}
+}
+'''

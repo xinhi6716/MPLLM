@@ -1,23 +1,30 @@
 # layers/thinker.py
 from core.nano import nano
-from prompts.templates import MPLLMPrompts
 
-def run_single_thinker(context: str, question: str, attempt_id: int, model_fn):
-    """執行單一次深度推理"""
+def run_single_thinker(context: str, question: str, idx: int, persona: str, model_fn):
+    """
+    執行單一次深度推理
+    """
+    # 若 persona 為空或 dict，給一個預設值
+    if not isinstance(persona, str):
+        persona = "You are a logical thinker."
+
     prompt = f"""
-    [Context from Researcher]:
+    [Context/Facts]:
     {context}
     
-    [Original Question]:
+    [Task]:
     {question}
     
-    [Instruction]:
-    This is Attempt #{attempt_id}. Please think deeply.
+    Please provide your reasoning and answer based on your persona.
     """
     
+    # 執行 nano
     output, tokens, msgs = nano(
-        persona=MPLLMPrompts.THINKER_SYSTEM,
+        persona=persona, 
         prompt=prompt,
         model_fn=model_fn
     )
-    return output, tokens
+    
+    # 關鍵修正：回傳 3 個值 (output, tokens, msgs)
+    return output, tokens, msgs

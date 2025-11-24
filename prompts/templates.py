@@ -1,31 +1,73 @@
 # prompts/templates.py
 
 class MPLLMPrompts:
-    # Layer 1: Switch (決定策略)
-    SWITCH_SYSTEM = """You are the Task Switcher of the MPLLM system.
-Analyze the user's request and output a JSON strategy.
-Output Format: {"task_type": "Creative/Logic/Knowledge", "needs_research": true/false, "complexity": "high/low"}"""
+    # --- 通用設定 ---
+    DEFAULT_SYSTEM = "You are a helpful AI assistant."
 
-    # Layer 2: Researcher (蒐集資料)
-    RESEARCHER_SYSTEM = """You are an expert Researcher.
-Your goal is to gather facts and context about the topic: '{topic}'.
-Output a structured summary. Do not hallucinate. If you don't know, say so."""
+    # --- Task 1: Trivia Creative Writing ---
+    TRIVIA_SWITCH_SYSTEM = """You are a Persona Generator.
+Given a topic, create 3 distinct groups of experts (Researcher + Thinker) to collaborate on writing a story.
+Format: JSON object with specific keys."""
+    
+    TRIVIA_SWITCH_USER = """Topic: {topic}
+Output JSON format:
+{{
+  "groups": [
+    {{"id": 1, "researcher": "...", "thinker": "..."}},
+    {{"id": 2, "researcher": "...", "thinker": "..."}},
+    {{"id": 3, "researcher": "...", "thinker": "..."}}
+  ],
+  "decider": "..."
+}}"""
 
-    # Layer 3: Thinker (深度推理)
-    THINKER_SYSTEM = """You are a deep thinking engine.
-Review the research data and the original question.
-Provide a step-by-step reasoning chain and a candidate answer.
-Focus on logical consistency."""
+    TRIVIA_WRITER = """Write a short, coherent story about {topic} that incorporates the answers to the following {n} questions: {questions}.
+Base your story on the best ideas provided."""
 
-    # Layer 4: MiniMux (整合評估)
-    MINIMUX_SYSTEM = """You are the MiniMux (Multiplexer Evaluator).
-You will receive multiple candidate answers from different Thinkers.
-Your task:
-1. Compare the candidates.
-2. Identify the most accurate and coherent solution.
-3. Output the best solution's content and your reason for choosing it."""
+    # --- Task 2: Codenames ---
+    CODENAMES_SWITCH_SYSTEM = """You are Personas Switch for a Codenames-style task."""
+    
+    CODENAMES_SWITCH_USER = """== Inputs ==
+- n = {n}
+- target_words = {target_words}
+- word_list = {word_list}
 
-    # Layer 5: Guesser (最終輸出)
-    GUESSER_SYSTEM = """You are the Guesser (Final Output Generator).
-Using the approved solution from the evaluator, synthesize the final response for the user.
-Tone: Professional and helpful."""
+== Your goals ==
+1) As Spymaster, output ONE English word clue.
+2) Select three diverse persona groups (researcher + thinker).
+3) Define ONE global decider.
+
+Output STRICT JSON:
+{{
+  "spymaster_clue": "word",
+  "groups": [
+    {{"group_id": 1, "researcher": {{ "persona": "..." }}, "thinker": {{ "persona": "..." }} }},
+    {{"group_id": 2, "researcher": {{ "persona": "..." }}, "thinker": {{ "persona": "..." }} }},
+    {{"group_id": 3, "researcher": {{ "persona": "..." }}, "thinker": {{ "persona": "..." }} }}
+  ],
+  "decider": {{ "persona": "..." }}
+}}"""
+
+    # --- Task 3: Logic Grid Puzzle (修復版) ---
+    # 這裡恢復了詳細的規則與 JSON 範例，確保模型能正確生成 groups 雖然我不知道為什麼要這麼做
+    LOGIC_SWITCH_SYSTEM = """You are Personas Switch for a Logic Grid Puzzle.
+Your goal is to breakdown the puzzle and assign roles to solve it."""
+    
+    LOGIC_SWITCH_USER = """== Input ==
+{inputs}
+
+== Your goals ==
+1) Select three complementary persona groups:
+   - researcher: extracts constraints (e.g., 'left of', 'next to').
+   - thinker: performs step-by-step deduction.
+2) Define one global decider persona who integrates the findings.
+
+== Output schema (STRICT JSON ONLY) ==
+{{
+  "groups": [
+    {{"group_id": 1, "researcher": {{"persona": "..."}}, "thinker": {{"persona": "..."}} }},
+    {{"group_id": 2, "researcher": {{"persona": "..."}}, "thinker": {{"persona": "..."}} }},
+    {{"group_id": 3, "researcher": {{"persona": "..."}}, "thinker": {{"persona": "..."}} }}
+  ],
+  "decider": {{"persona": "..."}}
+}}
+IMPORTANT: Return ONLY the JSON object. No markdown formatting."""

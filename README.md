@@ -59,12 +59,14 @@ MPLLM/
 │   ├── api_client.py       # OpenAI API 客戶端封裝
 │   ├── data_loader.py      # 支援 .jsonl 格式的資料讀取器 (含答案解析)
 │   ├── evaluator.py        # 自動評分邏輯 (Trivia, Codenames, Logic Regex)
-│   └── logger.py           # CSV 報表生成器 (自動處理檔案鎖定)
+│   ├── logger.py           # CSV 報表生成器 (自動處理檔案鎖定)
+│   └── nesting_manager.py  # 平行化運算機制與微型提示詞 (Mechanism Layer)  
 ├── data/                   # 測試數據集
 │   ├── trivia/             # Trivia Creative Writing
 │   ├── codenames/          # Codenames
 │   └── logic/              # Logic Grid Puzzle
 ├── pipeline_core.py        # 主流水線邏輯 (串接各層與格式化輸入)
+├── pipeline_nesting.py     # 嵌套邏輯流水線 (使用 Code-Level Nesting 平行架構)
 └── main.py                 # 程式入口 (CLI 介面)
 ```
 ##  Installation
@@ -111,7 +113,8 @@ python main.py --task logic --data data/logic_grid_puzzle/logic_grid_puzzle_200.
 ### 2. Trivia Creative Writing (創意寫作)
 測試模型的知識檢索與整合寫作能力。
 ```bash
-python main.py --task trivia --data data/trivia_creative_writing/trivia_creative_writing_100_n_5.jsonl --limit 5
+#可以選擇模式base(基本prompt), nesting(嵌套prompt) new from 2025.11.26
+python main.py --task trivia --mode base --limit 1
 ```
 ### 3. Codenames (聯想猜謎)
 測試 Spymaster 角色的語義聯想能力。

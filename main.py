@@ -3,13 +3,20 @@ import time
 import json
 import os
 import sys
-import random  # <--- [新增] 引入 random
+import random
+
+import utils.nesting_manager
+
+# === [Imports] Pipelines ===
+from pipeline_core import run_mpllm_pipeline 
+import pipeline_nesting
+
+# === [Imports] Utils & Core ===
 from utils.api_client import get_openai_model_fn
 from utils.data_loader import load_dataset
 from utils.logger import save_batch_results
 from utils.evaluator import evaluate_response
 from core.tracker import CostTracker
-from pipeline_core import run_mpllm_pipeline
 
 def main():
     # === 0. 設定預設路徑 ===
@@ -20,26 +27,27 @@ def main():
     # 1. 解析命令行參數
     parser = argparse.ArgumentParser(description="MPLLM Nano Runner")
     parser.add_argument('--task', type=str, choices=['trivia', 'codenames', 'logic'], help="Task to run")
+    parser.add_argument('--mode', type=str, choices=['base', 'nesting'], default='base', help="Select pipeline architecture")
     parser.add_argument('--data', type=str, help="Path to .jsonl dataset")
     parser.add_argument('--limit', type=int, default=1, help="Number of items to test")
     parser.add_argument('--interactive', action='store_true', help="Run in interactive chat mode")
     args = parser.parse_args()
 
     # ==========================================
-    # 互動式選單 (當沒有指定 task 時觸發)
+    # 1.1 互動式選單 (若無參數輸入)
     # ==========================================
     if not args.task and not args.interactive:
         print("\n" + "="*45)
         print(" 🤖 MPLLM Launcher Menu")
         print("="*45)
         
-        # --- 步驟 1: 選擇任務 ---
+        # --- 選擇任務 ---
         print("[Step 1] 請選擇任務:")
         print(" 1. 📝 Trivia (Creative Writing)")
         print(" 2. 🕵️  Codenames")
         print(" 3. 🧩 Logic Puzzle")
         print("-" * 45)
-        print(" 4. 💬 自由對話模式 (Chat Mode - No Scoring)")
+        print(" 4. 💬 自由對話模式 (Chat Mode)")
         print("="*45)
         
         choice = input("👉 請輸入選項 (1-4): ").strip()
@@ -52,10 +60,22 @@ def main():
             print("⚠️ 無效選項，預設執行 Trivia")
             args.task = 'trivia'
 
-        # --- 步驟 2: 選擇 Single 或 Batch (若非對話模式) ---
+        # --- 選擇 Pipeline 模式 ---
         if not args.interactive:
             print("\n" + "-"*45)
-            print(f"[Step 2] 選擇 '{args.task}' 的執行模式:")
+            print("[Step 2] 選擇 Pipeline 架構:")
+            print(" 1. 🛠️  Baseline (Standard Pipeline)")
+            print(" 2. 🧪 Nesting  (Experimental Pipeline)")
+            m_choice = input("👉 請輸入選項 (1-2): ").strip()
+            if m_choice == '2': 
+                args.mode = 'nesting'
+            else:
+                args.mode = 'base'
+
+        # --- 選擇 數量 ---
+        if not args.interactive:
+            print("\n" + "-"*45)
+            print(f"[Step 3] 選擇 '{args.task}' 的執行模式:")
             print(" 1. 🎲 Random Single (隨機抽 1 題)")
             print(" 2. 📚 Sequential Batch (依序測 N 題)")
             
@@ -74,19 +94,18 @@ def main():
 
             time.sleep(0.5)
 
-    # === 自動填入資料路徑 ===
+    # === 1.2 自動填入資料路徑 ===
     if args.task and not args.data:
-        if args.task == 'trivia':
-            args.data = DATA_TRIVIA_PATH
-        elif args.task == 'codenames':
-            args.data = DATA_CODENAMES_PATH
-        elif args.task == 'logic':
-            args.data = DATA_LOGIC_PATH
+        if args.task == 'trivia': args.data = DATA_TRIVIA_PATH
+        elif args.task == 'codenames': args.data = DATA_CODENAMES_PATH
+        elif args.task == 'logic': args.data = DATA_LOGIC_PATH
         print(f"📂 Auto-selected data: {args.data}")
 
     # 2. 初始化模型與參數
     ARCHITECTURE = "MPLLM"
-    MODEL_NAME = "GPT5-Mix"
+    # [User Request] 使用動態模型名稱
+    MODEL_NAME = f"GPT5-{args.mode.upper()}" 
+    # [User Request] 測試模式判斷
     TEST_MODE = "Batch" if args.limit > 1 else "Single"
 
     mini_model = get_openai_model_fn("gpt-5-mini")
@@ -95,6 +114,14 @@ def main():
     tracker = CostTracker()
     batch_results = []
 
+    # [User Request] 決定 Pipeline 函式
+    if args.mode == 'nesting':
+        print("\n🧪 Switching to NESTING Pipeline...")
+        pipeline_run_fn = pipeline_nesting.run_pipeline
+    else:
+        print("\n🛠️ Using BASELINE Pipeline...")
+        pipeline_run_fn = run_mpllm_pipeline
+
     # === 模式 A: 自由對話模式 ===
     if args.interactive:
         print("\n=== 💬 Interactive Chat Mode (No Scoring) ===")
@@ -102,14 +129,14 @@ def main():
             try:
                 user_q = input("\nUser Topic: ")
                 if user_q.lower() in ['exit', 'quit']: break
-                ans, _ = run_mpllm_pipeline('trivia', {"topic": user_q, "questions": []}, models, tracker)
+                ans, _ = pipeline_run_fn('trivia', {"topic": user_q, "questions": []}, models, tracker)
                 print(f"\n🤖 MPLLM: {ans}\n")
             except KeyboardInterrupt: break
             except Exception: break
         return
 
     # === 模式 B: 數據集評測模式 ===
-    print(f"=== 🚀 Running: {args.task} | Mode: {TEST_MODE} ===")
+    print(f"=== 🚀 Running: {args.task} | Mode: {TEST_MODE} | Limit: {args.limit} ===")
     
     dataset = load_dataset(args.task, args.data)
     if not dataset:
@@ -117,59 +144,64 @@ def main():
         return
 
     # ==========================================
-    # [核心修改] 題目選擇邏輯
+    # [核心] 題目選擇邏輯
     # ==========================================
     items_to_process = []
-    
     if args.limit == 1:
-        # Single Mode: 隨機選一題
         if len(dataset) > 0:
             selected = random.choice(dataset)
-            # 嘗試找出它是原始資料集中的第幾題 (index+1)
             original_idx = dataset.index(selected) + 1
-            print(f"🎲 Randomly selected Item #{original_idx} (from {len(dataset)} items)")
+            print(f"🎲 Randomly selected Item #{original_idx}")
             items_to_process = [selected]
     else:
-        # Batch Mode: 選前 N 題
         items_to_process = dataset[:args.limit]
         print(f"📚 Selected top {len(items_to_process)} items sequentially.")
 
     # ==========================================
-    # 執行迴圈
+    # 執行迴圈 (含進度條與即時存檔)
     # ==========================================
     total_score = 0.0
-    processed_count = 0
+    total_items = len(items_to_process)
+    bar_length = 30
     
+    # 用於存檔的 Meta Info
+    meta_info = {
+        "architecture": ARCHITECTURE,
+        "model": MODEL_NAME,
+        "mode": TEST_MODE
+    }
+
+    print("\nProcessing...")
+
     for i, item in enumerate(items_to_process):
-        # 顯示當前進度 (如果是隨機，這裡的 i+1 只是執行次序)
-        print(f"\n🔸 Processing Task {i+1}/{len(items_to_process)}...")
         start_time = time.time()
         
         try:
-            final_ans, trace = run_mpllm_pipeline(args.task, item, models, tracker)
+            # 執行 Pipeline
+            final_ans, trace = pipeline_run_fn(args.task, item, models, tracker)
             duration = time.time() - start_time
             
+            # 評分
             eval_result = evaluate_response(args.task, final_ans, item)
             score = eval_result.get('score', 0.0)
             details = eval_result.get('details', "")
-            
             total_score += score
-            processed_count += 1
             
-            # 顯示簡化結果
+            # 獲取 Token
+            run_tokens = trace.get('total_tokens', 0)
+            
+            # 格式化輸出
             ans_str = json.dumps(final_ans, ensure_ascii=False)
-            display_str = (ans_str[:75] + '...') if len(ans_str) > 75 else ans_str
             
-            print(f"   🤖 Output: {display_str}") 
-            print(f"   🏆 Score: {score:.2f} ({details}) | ⏱️ {duration:.2f}s")
-            
+            # 記錄
             current_stats = tracker.get_summary()
             result_entry = {
                 "id": i + 1,
                 "task": args.task,
+                "mode": args.mode,
                 "input_summary": str(item)[:100].replace("\n", " "),
                 "final_answer": ans_str,
-                "tokens": trace.get('tokens', 0) if 'tokens' in trace else current_stats.get('total_tokens', 0),
+                "tokens": run_tokens,
                 "cost": current_stats['cost_usd'],
                 "time": duration,
                 "score": score,
@@ -177,22 +209,30 @@ def main():
             }
             batch_results.append(result_entry)
             
+            # [即時存檔]
+            save_batch_results(batch_results, meta_info)
+
+            # [進度條 UI]
+            progress = (i + 1) / total_items
+            filled = int(bar_length * progress)
+            bar = '█' * filled + '-' * (bar_length - filled)
+            avg_score = total_score / (i + 1)
+            
+            # 使用 \r 覆蓋當前行
+            sys.stdout.write(f'\r|{bar}| {i+1}/{total_items} [{(progress*100):.0f}%] - Avg: {avg_score:.2f} - Last: {duration:.1f}s')
+            sys.stdout.flush()
+            
         except Exception as e:
-            print(f"⚠️ Error on item: {e}")
+            # 出錯時換行顯示，避免破壞進度條
+            print(f"\n⚠️ Error on item {i+1}: {e}")
             # import traceback; traceback.print_exc()
 
-    if batch_results:
-        save_batch_results(batch_results, {
-            "architecture": ARCHITECTURE,
-            "model": MODEL_NAME,
-            "mode": TEST_MODE
-        })
-
-    print("\n" + "="*45)
-    avg_score = total_score / processed_count if processed_count > 0 else 0
-    print(f"✅ Finished {processed_count} items.")
-    print(f"🏆 Avg Score: {avg_score:.2%}")
+    print("\n\n" + "="*45)
+    final_avg = total_score / total_items if total_items > 0 else 0
+    print(f"✅ Finished {total_items} items.")
+    print(f"🏆 Final Avg Score: {final_avg:.2%}")
     print(f"💰 Total Cost: ${tracker.get_summary()['cost_usd']:.6f}")
+    print(f"📂 Results saved to: logs/ (Model: {MODEL_NAME})")
     print("="*45)
 
 if __name__ == "__main__":

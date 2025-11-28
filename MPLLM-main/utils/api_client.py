@@ -8,7 +8,6 @@ def get_openai_model_fn(model_name: str = "gpt-4o-mini", api_key: str = None) ->
     回傳一個閉包 (Closure)，這個閉包符合 ModelFn 的簽名。
     自動處理 API key 和 Client 初始化。
     """
-    api_key = "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"
     # 如果沒有傳入 key，嘗試從環境變數讀取
     key = api_key or os.environ.get("OPENAI_API_KEY")
     if not key:
@@ -20,7 +19,7 @@ def get_openai_model_fn(model_name: str = "gpt-4o-mini", api_key: str = None) ->
         response = client.chat.completions.create(
             model=model_name,
             messages=messages,
-            temperature=1
+            temperature=0.7
         )
         content = response.choices[0].message.content
         # 計算總 token (input + output)
